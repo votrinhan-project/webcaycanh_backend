@@ -28,7 +28,15 @@ router.get(
       const upsertResult = await pool.query(upsertQuery, [req.user.id, req.user.displayName, req.user.email]);
       if (upsertResult.rowCount > 0) {
         const userFromDB = upsertResult.rows[0];
-        const token = jwt.sign({ user: userFromDB }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        const formattedUser = {
+          id: userFromDB.id,
+          idGoogle: userFromDB.idgoogle,
+          displayName: userFromDB.displayname,
+          email: userFromDB.email,
+          role: userFromDB.role
+        };
+        const token = jwt.sign({ user: formattedUser }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        // const token = jwt.sign({ user: userFromDB }, process.env.JWT_SECRET, { expiresIn: '1h' });
         res.redirect(`${process.env.FRONTEND_URL}/login-success?token=${token}`);
       } else {
         res.redirect(`${process.env.FRONTEND_URL}/login?error=no_user_found`);
