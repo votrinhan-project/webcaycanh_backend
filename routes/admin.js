@@ -12,6 +12,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const sharp = require('sharp');
+const uploadFile = require('../utils/gcsUploader');
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
@@ -21,32 +22,31 @@ router.post('/products', upload.array('images', 10), async (req, res) => {
   const { ten_cay, ten_khoa_hoc, dac_diem, y_nghia_phong_thuy, loi_ich, gia } = req.body;
   try {
     const result = await pool.query(
-      "INSERT INTO data (ten_cay, ten_khoa_hoc, dac_diem, y_nghia_phong_thuy, loi_ich, gia) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+      "INSERT INTO data (ten_cay, ten_khoa_hoc, dac_diem, y_nghia_phong_thuy, loi_ich, gia) \
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
       [ten_cay, ten_khoa_hoc, dac_diem, y_nghia_phong_thuy, loi_ich, gia]
     );
     const productId = result.rows[0].id;
-    
-    const targetDir = path.join(__dirname, '../../frontend/public/images_tree');
-    console.log("Target directory:", targetDir);
-    await fs.mkdir(targetDir, { recursive: true });
-    
+
+    const imageUrls = [];
     if (req.files && req.files.length > 0) {
       for (let i = 0; i < req.files.length; i++) {
         const file = req.files[i];
-        const outputFilename = `${ten_cay}_${i + 1}.jpg`;
-        const outputPath = path.join(targetDir, outputFilename);
-        try {
-          await sharp(file.buffer)
-            .jpeg()
-            .toFile(outputPath);
-        } catch (fileErr) {
-          console.error(`Error processing file ${outputFilename}:`, fileErr);
-        }
+        const processedBuffer = await sharp(file.buffer)
+          .jpeg()
+          .toBuffer();
+        const destination = `${ten_cay}_${i + 1}.jpg`;
+
+        const imageUrl = await uploadFile(processedBuffer, destination, 'image/jpeg');
+        imageUrls.push(imageUrl);
+
+        await pool.query(
+          "INSERT INTO product_images (product_id, image_path) VALUES ($1, $2)",
+          [productId, imageUrl]
+        );
       }
-    } else {
-      console.warn("No files received in req.files");
     }
-    res.json({ message: "Thêm sản phẩm thành công", productId });
+    res.json({ message: "Thêm sản phẩm thành công", productId, imageUrls });
   } catch (error) {
     console.error("Error in product upload:", error);
     res.status(500).json({ error: error.message });
