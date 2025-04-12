@@ -12,7 +12,19 @@ const pool = require("../models/db");
 // Lấy danh sách tất cả sản phẩm
 router.get("/", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM data");
+    const query = `
+      SELECT d.*, 
+        COALESCE(
+          (
+            SELECT json_agg(pi.image_path ORDER BY pi.id)
+            FROM product_images pi
+            WHERE pi.product_id = d.id
+          ),
+          '[]'::json
+        ) AS images
+      FROM data d;
+    `;
+    const result = await pool.query(query);
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
